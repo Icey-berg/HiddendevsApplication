@@ -5,7 +5,7 @@ local min = tool.RadiusInner.Value
 local max = tool.RadiusOuter.Value
 
 local chaosFactor = 100 --// Determines how NOT smooth the bezier curves will be
-local studsPerRenderNode = 4
+local studsPerPathNode = 4 --// studsPerPathNode is used instead of a set amount of path nodes to eliminate uneven distribution, thus allowing linear missile speeds. Prevents: https://developer.roblox.com/assets/bltcdd5fd2ce9185675/Bezier8.gif Causes: https://developer.roblox.com/assets/blt2ee53c6a18bb5ec1/Bezier9.gif
 local frameNodes = 5
 local missiles = 15
 
@@ -74,8 +74,8 @@ event.OnServerEvent:Connect(function(player, hit)
 
 			local pathPositions = {}
 			
-			--// Apply studsPerRenderNode
-			local goal = distance/studsPerRenderNode 
+			--// Apply studsPerPathNode
+			local goal = distance/studsPerPathNode 
 			local increment = goal/distance 
 			
 
@@ -95,7 +95,7 @@ event.OnServerEvent:Connect(function(player, hit)
 			missileNode.LaunchSound:Play()
 			missileNode.FlyingSound:Play()
 			
-			task.spawn(function() --// Move the missile along the path. We use task.spawn() so that it doesnt yield the creation of all the other missiles.
+			task.spawn(function() --// Move the missile along the path. Use task.spawn() so that it doesnt yield the creation of all the other missiles.
 				for i = 1, #pathPositions do
 					local pathPos = pathPositions[i]
 					
@@ -115,7 +115,8 @@ event.OnServerEvent:Connect(function(player, hit)
 				local explosion = Instance.new("Explosion") --// Create Explosion effect
 				explosion.Position = missileNode.Position
 				explosion.Parent = workspace
-				--// Dont destroy the missile right away because the trail is still stretched. Otherwise the trail will seamingling disappear and it would not look as aesthetic
+						
+				--// Dont destroy the missile right away as the trail is still stretched. Destroying the missile with no delay will cause the trail to seamingling disappear and it would not look as aesthetic
 				missileNode.Transparency = 1
 				game.Debris:AddItem(missileNode, 0.6)
 				
