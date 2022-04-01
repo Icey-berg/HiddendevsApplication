@@ -1,133 +1,58 @@
-local tool = script.Parent
-local event = tool.FireMissiles
-
-local min = tool.RadiusInner.Value
-local max = tool.RadiusOuter.Value
-
-local chaosFactor = 100 --// Determines how NOT smooth the bezier curves will be
-local studsPerRenderNode = 4
-local frameNodes = 5
-local missiles = 15
-
-local NodeTemplate = game.ReplicatedStorage.NodeTemplate
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local mouse = player:GetMouse()
 
 local TweenService = game:GetService("TweenService")
-local tweenTimeMin = 10
-local tweenTimeMax = 30
+local TI = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
 
-local explodeSound = game.SoundService.SmallExplosion
-local missileModel = game.ReplicatedStorage.Missile
+local tool = script.Parent
+local RadiusOuter = game.ReplicatedStorage:WaitForChild("RadiusOuter")
+local RadiusInner = game.ReplicatedStorage:WaitForChild("RadiusInner")
 
-function multilerp(t, ...) --// Repeatively lerps through supplied points (arg 2) with the alpha declared in variable t (arg 1)
-	local Points = {...}
+local RadiusInnerValue = tool:WaitForChild("RadiusInner").Value * 2
+local RadiusOuterValue = tool:WaitForChild("RadiusOuter").Value * 2
 
-
-	while #Points > 2 do --// Repeatively lerp until only 2 positions remain
-		for i, v in pairs(Points) do
-			local NextPoint = Points[i + 1]
-			if NextPoint == nil then --// When the for loop reaches the last position/index, remove itself because it was already lerped in the previous iteration
-				table.remove(Points, i)
-			else
-				Points[i] = v:Lerp(NextPoint, t)
-			end
-		end
+tool.Activated:Connect(function()
+	if mouse.hit then
+		script.Parent.FireMissiles:FireServer(mouse.Hit)
 	end
+end)
 
-	return Points[1]:Lerp(Points[2], t) --// Lerp the final positions
-end
-
-event.OnServerEvent:Connect(function(player, hit)
+tool.Equipped:Connect(function() --// Create the ffects
 	
-	local character = player.Character
-	local root = character.HumanoidRootPart
+	tool.EquipSound:Play()
+	character.HumanoidRootPart.Anchored = true
+	local r1 = RadiusInner:Clone()
+	r1.Parent = workspace
+	r1.Position = character.HumanoidRootPart.Position
 	
-	local targetPosition = hit.Position
-	local distance = math.floor((targetPosition - root.Position).Magnitude)
-	
-	
-	if distance <= max and distance >= min then
+	local w1 = Instance.new("WeldConstraint")
+	w1.Part0 = r1
+	w1.Part1 = character.HumanoidRootPart
+	w1.Parent = r1
 		
-		local endNode = NodeTemplate:Clone()
-		endNode.Position = targetPosition
-		endNode.Transparency = 1
-		endNode.Parent = workspace
-				
-		for i = 1, missiles do
-			local framePositions = {}	
-			
-			local missileTweenTime = math.random(tweenTimeMin, tweenTimeMax) / (distance * 5)
+	TweenService:Create(r1, TI, { Size = Vector3.new(RadiusInnerValue,RadiusInnerValue,RadiusInnerValue) }):Play()
+	
+	local r2 = RadiusOuter:Clone()
+	r2.Parent = workspace
+	r2.Position = character.HumanoidRootPart.Position
 
-			local missileTweenInfo = TweenInfo.new(missileTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-			
-			for i = 0, 1, 1/frameNodes do	
-				
-				local position = root.Position:Lerp(targetPosition, i)
-				if i ~= 0 and i ~= 1 then --// Doing this will make sure that the missile isn't offset when it comes out of the player root (0) and also when it's arriving at the targetPosition (1) 
-					position += Vector3.new(math.random(-chaosFactor, chaosFactor),math.random(0, chaosFactor*1.5),math.random(-chaosFactor, chaosFactor))
-				end
+	local w2 = Instance.new("WeldConstraint")
+	w2.Part0 = r2
+	w2.Part1 = character.HumanoidRootPart
+	w2.Parent = r2
 
-				table.insert(framePositions, position)		
-			end
 
-			local pathPositions = {}
-			
-			--// Apply studsPerRenderNode
-			local goal = distance/studsPerRenderNode 
-			local increment = goal/distance 
-			
+	TweenService:Create(r2, TI, { Size = Vector3.new(RadiusOuterValue,RadiusOuterValue,RadiusOuterValue) }):Play()
+	
 
-			for i = 0, goal, increment do
-				local position = multilerp(i/goal, table.unpack(framePositions))
-				table.insert(pathPositions, position)
-				--[[
-				How does this work?
-				Some values may not fully add up to one. For example: 0.3. The method used here fixes it by creating a number (goal) which the increment variable can 
-				evenly divide into. Then we do i/goal to get a decimal percentage value which is used as t (lerp alpha)				
-				]]
-			end
-			
-			local missileNode = missileModel:Clone()
-			missileNode.Position = root.Position
-			missileNode.Parent = workspace
-			missileNode.LaunchSound:Play()
-			missileNode.FlyingSound:Play()
-			
-			task.spawn(function() --// Move the missile along the path. We use task.spawn() so that it doesnt yield the creation of all the other missiles.
-				for i = 1, #pathPositions do
-					local pathPos = pathPositions[i]
-					
-					local tweenGoal
-					
-					if i == #pathPositions then
-						tweenGoal = { Position = pathPos }
-					else
-						tweenGoal = { CFrame = CFrame.new(pathPos, pathPositions[i + 1]) }
-					end
-					
-					local tween = TweenService:Create(missileNode, missileTweenInfo, tweenGoal)
-					tween:Play()
-					task.wait(missileTweenTime - missileTweenTime/2) --// Avoid choppiness by cutting tweens slightly short
-				end
-				
-				local explosion = Instance.new("Explosion") --// Create Explosion effect
-				explosion.Position = missileNode.Position
-				explosion.Parent = workspace
-				--// Dont destroy the missile right away because the trail is still stretched. Otherwise the trail will seamingling disappear and it would not look as aesthetic
-				missileNode.Transparency = 1
-				game.Debris:AddItem(missileNode, 0.6)
-				
-				local explosionSoundClone = explodeSound:Clone()
-				explosionSoundClone.Parent = endNode
-				explosionSoundClone:Play()
-				
-				explosionSoundClone.Ended:Wait()
-				if i == #pathPositions then --// Destroy the endNode if currently on last missile
-					endNode:Destroy()
-				end
-				
-			end)			
+end)
 
-		end
-		
-	end
+tool.Unequipped:Connect(function()
+	character.HumanoidRootPart.Anchored = false
+	TweenService:Create(workspace.RadiusInner, TI, { Size = Vector3.new(0,0,0) }):Play()
+	TweenService:Create(workspace.RadiusOuter, TI, { Size = Vector3.new(0,0,0) }):Play()
+	task.wait(0.5)
+	workspace.RadiusInner:Destroy()
+	workspace.RadiusOuter:Destroy()
 end)
