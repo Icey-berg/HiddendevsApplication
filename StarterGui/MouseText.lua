@@ -27,7 +27,7 @@ game:GetService("RunService").Heartbeat:Connect(function()
 	
 	local humanoidsInRange = (function()
 		local h = 0
-		for i, v in pairs(workspace:GetDescendants()) do
+		for i, v in pairs(workspace.Living:GetDescendants()) do
 			if v:IsA("Humanoid") and v.Health > 0 and (v.Parent.HumanoidRootPart.Position - position).Magnitude <= 4 then
 				h +=1
 			end
